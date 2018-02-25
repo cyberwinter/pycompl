@@ -1,6 +1,6 @@
-Lexer
-Parser
-Translator
-Generator
-Optimization
+Lexer;
+Parser;
+Translator;
+Generator;
+Optimization;
 Parallels?
