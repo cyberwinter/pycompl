@@ -9,31 +9,37 @@ RELOP = "Relop"
 RESERVED = "Reserved"
 SYMBOL = "Symbol"
 NUMBER = "Numeric"
+OPERATOR = "Operator"
 
 GT = 1;LT = 2;EQ = 3;LE = 4;GE = 5; NE = 6;
 NUM = 7;ID = 8
 IF  = 9; ELSE = 10; FOR = 11; WHILE = 12;DO = 13; 
 OPRQ = 14; CLRQ = 15; OPFQ = 16; CLFQ = 17; OPSQ = 18;CLSQ = 19
 PRINT = 20
-ENDSTMT = 21
+ENDSTMT = 21;
 INT=22;STRING=23;CHAR=24;VOID=25; UINT = 26;FLOAT=31;
-SET=27;PLUS=28;MINUS=29;MULT=30
+SET=27;PLUS=28;MINUS=29;MULT=30; PLSET = 32; MUSET = 33; MISET = 34;DIV=35;DISET=36;MOD=37;MOSET=38
+DOT=39;ZP = 40;
+SHR = 41; SHL = 42;
+INCLUDE = 43; DEFINE = 44;
 
 KEYWORDS = {IF: re.compile(r'^(if)[ (]'), 
             ELSE:re.compile(r'^(else)[ (]'), 
             FOR: re.compile(r'^(for)[ (]'), 
             WHILE: re.compile(r'^(while)[ (]'), 
             DO: re.compile(r'^(do)[ {]'), 
-            PRINT: re.compile(r'^(print) '),
+            PRINT: re.compile(r'^(print)[ (]'),
             INT: re.compile(r'^(int)[ ()\*]'),
             CHAR: re.compile(r'^(char)[ ()\*]'),
             VOID: re.compile(r'^(void)[ ()\*]'),
             STRING: re.compile(r'^(string)[ ()\*]'),
             FLOAT: re.compile(r'^(float)[ ()\*]'),
             UINT: re.compile(r'^(uint)[ ()\*]'),
+            INCLUDE: re.compile(r'^(#include)[ <]'),
+            DEFINE: re.compile(r'^(#define)[ <]')
             }
-ID_RE = re.compile(r'^[a-zA-Z]+[_0-9A-Za-z]* ')
-NUM_RE = re.compile(r'^([0-9]+)(\.[0-9]*)?([Ee][+-][0-9]*)? ')
+ID_RE = re.compile(r'^([a-zA-Z]+[_0-9A-Za-z]*)[^_0-9A-Za-z]')
+NUM_RE = re.compile(r'^([0-9]+)(\.[0-9]*)?([Ee][+-][0-9]*)?[^0-9]')
 
 DEL_RE = re.compile(r"[ \t]")
 
@@ -53,16 +59,22 @@ class Lexer():
                 self.forward = 0
                 self.lexeme_begin = 0
                 self.tokens = []
+                self.lines = 0
 
         def GetNextToken(self):
                 if self.input[self.lexeme_begin] != EOF:
                       
-                        print("Parsing %s" % self.input[self.lexeme_begin: self.lexeme_begin + 10])
-                        while DEL_RE.match(self.input[self.lexeme_begin]) is not None:
-                    #            self.position += 1
+                        print("Parsing %s" % self.input[self.lexeme_begin: self.lexeme_begin + 15])
+                        c = self.input[self.lexeme_begin]
+                        while (DEL_RE.match(c) is not None) or (c== '\n'):
+                                if c == '\n':
+                                        self.lines += 1
                                 self.forward += 1
                                 self.lexeme_begin = self.forward
-                                print("Found space!")
+                               
+                                c = self.input[self.lexeme_begin]
+                                #print("Found space!")
+                        
                         if self.input[self.forward] == EOF:
                                 return EOF
                         token = self.GetKeyword()
@@ -93,11 +105,20 @@ class Lexer():
                                 self.tokens.append(token)
                                 self.lexeme_begin = self.forward
                                 return token
+
                         token = self.GetOperator()
                         if token is not False:
                                 self.tokens.append(token)
                                 self.lexeme_begin = self.forward
+                                return token
 
+                        if self.NextChar() == ';':
+                                token = Token(';')
+                                token.attribute = ENDSTMT
+                                self.tokens.append(token)
+                                self.lexeme_begin = self.forward
+                                return token
+                        
                         self.lexeme_begin = self.forward
                         print("Error at '%s'" % self.input[self.lexeme_begin:])
                         exit(0)
@@ -107,7 +128,78 @@ class Lexer():
                         print("No lexemes left!")
                         return EOF
                         
+        def GetOperator(self):
+                retToken = Token(OPERATOR)
+                c = self.NextChar()
+                print(c)
+                if c == '=':
+                        retToken.attribute = SET
+                elif c == '*':
+                        add = self.NextChar()
+                        retToken.attribute = MULT
+                        if add  == '=':
+                                retToken.attribute = MUSET
+                        else:
+                                self.Retract()
+                elif c == '+':
+                        add = self.NextChar()
+                        retToken.attribute = PLUS
+                        if add == '=':
+                                retToken.attribute = PLSET
+                        else:
+                                self.Retract()
+                elif c == '-':
+                        add = self.NextChar()
+                        retToken.attribute = MINUS
+                        if add == '=':
+                                retToken.attribute = MISET
+                        else:
+                                self.Retract()
+                   
                         
+                elif c == '/':
+                        add = self.NextChar()
+                        retToken.attribute = DIV
+                        if add == '=':
+                                retToken.attribute = DISET
+                        else:
+                                self.Retract()
+
+                elif c == '%':
+                        add = self.NextChar()
+                        retToken.attribute = MOD
+                        if add == '=':
+                                retToken.attribute = MOSET
+                        else:
+                                self.Retract()
+                elif c == '.':
+                        retToken.attribute = DOT
+                elif c == ',':
+                        retToken.attribute = ZP
+                elif c == '>':
+                        add = self.NextChar()
+                        if add == '>':
+                                retToken.attribute = SHR
+                        else:
+                                self.Retract()
+                            
+                elif c == '<':
+                        add = self.NextChar()
+                        if add == '<':
+                                retToken.attribute = SHL
+                        else:
+                                self.Retract()
+                            
+                else:
+                        self.Retract()
+                        self.Fail()
+                        return False
+
+                return retToken
+                        
+                   
+                   
+
         def GetQuotes(self):
                 c = self.NextChar()
                 retToken = Token("Quote")
@@ -144,7 +236,8 @@ class Lexer():
 
                         retToken.value = val
                         print(retToken.value)
-                        self.forward += match.end(0)
+                        end = max(match.end(1), match.end(2), match.end(3))
+                        self.forward += end
                         return retToken
                 self.Fail()
                 return False
@@ -175,8 +268,8 @@ class Lexer():
                 if match is not None:
                         retToken.attribute = ID
                         
-                        retToken.value = match.string[0:match.end()]
-                        self.forward += match.end()
+                        retToken.value = match.string[0:match.end(1)]
+                        self.forward += match.end(1)
                         return retToken
                 self.Fail()
                 return False
@@ -211,6 +304,9 @@ class Lexer():
                             if c == '=':
                                     retToken.attribute = LE
                                     return retToken
+                            elif c == '<':
+                                    self.Fail()
+                                    return False
                             else:
                                     self.Retract()
                                     retToken.attribute = LT
@@ -239,6 +335,10 @@ class Lexer():
                             if c == '=':
                                     retToken.attribute = GE
                                     return retToken
+                            
+                            elif c == '>':
+                                    self.Fail()
+                                    return False
                             else:
                                     self.Retract()
                                     retToken.attribute = GT
@@ -250,7 +350,7 @@ class Lexer():
 #simple hello world
 if __name__ == '__main__':
         in_string = sys.argv[1]
-        print("Lexing%s" % in_string)
+        print("Lexing %s" % in_string)
         if os.path.isfile(in_string):
                 try:
                         in_string = open(in_string, 'r').read()
@@ -268,7 +368,8 @@ if __name__ == '__main__':
                         print("EOF met. ")
                         break
                 print tok.name + ', ' + str(tok.attribute)
-                
+                       
             
         #f = lex.DenyFunc(sys.argv[1])
-        print([(token.attribute, token.name) for token in lex.tokens])
+        print([token.name for token in lex.tokens])
+        print(in_string)
