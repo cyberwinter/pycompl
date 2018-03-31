@@ -1,4 +1,4 @@
-Lexer;
+Lexer; X
 Parser;
 Translator;
 Generator;
