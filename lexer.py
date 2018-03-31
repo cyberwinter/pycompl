@@ -1,15 +1,24 @@
-#!-
+"""
+Lexical analyzer module, this one should be used in syntax analyzer
+TODO: implement string literals tokenization
+"""
+
 import sys, re
 import ipdb
 import os
 EOF = b'\x00'
 
 INVALID_TOKEN = 0
+
+#token category names
+
 RELOP = "Relop"
 RESERVED = "Reserved"
 SYMBOL = "Symbol"
 NUMBER = "Numeric"
 OPERATOR = "Operator"
+
+#token types
 
 GT = 1;LT = 2;EQ = 3;LE = 4;GE = 5; NE = 6;
 NUM = 7;ID = 8
@@ -17,12 +26,16 @@ IF  = 9; ELSE = 10; FOR = 11; WHILE = 12;DO = 13;
 OPRQ = 14; CLRQ = 15; OPFQ = 16; CLFQ = 17; OPSQ = 18;CLSQ = 19
 PRINT = 20
 ENDSTMT = 21;
-INT=22;STRING=23;CHAR=24;VOID=25; UINT = 26;FLOAT=31;
+INT=22;STRING=23;CHAR=24;VOID=25; UINT = 26;FLOAT=31;STRUCT=45;
 SET=27;PLUS=28;MINUS=29;MULT=30; PLSET = 32; MUSET = 33; MISET = 34;DIV=35;DISET=36;MOD=37;MOSET=38
 DOT=39;ZP = 40;
 SHR = 41; SHL = 42;
 INCLUDE = 43; DEFINE = 44;
 
+#some reg. expressions used in lexical analysis
+
+alphnum = r'[A-Za-z0-9_]'
+not_alphnum = r'[^A-Za-z0-9_]'
 KEYWORDS = {IF: re.compile(r'^(if)[ (]'), 
             ELSE:re.compile(r'^(else)[ (]'), 
             FOR: re.compile(r'^(for)[ (]'), 
@@ -36,15 +49,25 @@ KEYWORDS = {IF: re.compile(r'^(if)[ (]'),
             FLOAT: re.compile(r'^(float)[ ()\*]'),
             UINT: re.compile(r'^(uint)[ ()\*]'),
             INCLUDE: re.compile(r'^(#include)[ <]'),
-            DEFINE: re.compile(r'^(#define)[ <]')
+            DEFINE: re.compile(r'^(#define)[ <"]'),
+            STRUCT: re.compile(r'^(struct)' + not_alphnum)
             }
+
 ID_RE = re.compile(r'^([a-zA-Z]+[_0-9A-Za-z]*)[^_0-9A-Za-z]')
 NUM_RE = re.compile(r'^([0-9]+)(\.[0-9]*)?([Ee][+-][0-9]*)?[^0-9]')
 
 DEL_RE = re.compile(r"[ \t]")
 
 
+
 class Token:
+        """
+        Token class:
+                Token objects = output of lexic analysis. Some tokens require lexic value
+                attribute (e.g.: Token of type NUM should contain .value equal to number
+                being represented.
+
+        """
         name = ''
         attribute = INVALID_TOKEN
         
@@ -53,6 +76,11 @@ class Token:
                 self.attribute = attribute
 
 class Lexer():
+        """
+        Lexer class:
+                Class object initialized by input data, and then GetNextToken() method
+                may be used for consistent tokenization.
+        """
         def __init__(self, input_text):
                 self.input = input_text + ' ' + EOF
                 self.position = 0
@@ -61,7 +89,13 @@ class Lexer():
                 self.tokens = []
                 self.lines = 0
 
+
         def GetNextToken(self):
+                """
+                GetNextToken() method:
+                        no input args, returns Token class object, or EOF value, if end of input
+                        is reached.
+                """
                 if self.input[self.lexeme_begin] != EOF:
                       
                         print("Parsing %s" % self.input[self.lexeme_begin: self.lexeme_begin + 15])
@@ -88,14 +122,14 @@ class Lexer():
                                 self.tokens.append(token)
                                 self.lexeme_begin = self.forward
                                 return token
+                    
                         token = self.GetId()
-                        print("IDS")
                         if token is not False:
                                 self.tokens.append(token)
                                 self.lexeme_begin = self.forward
                                 return token
+                        
                         token = self.GetNumber()
-                        print("NUMS")
                         if token is not False:
                                 self.tokens.append(token)
                                 self.lexeme_begin = self.forward
@@ -111,14 +145,19 @@ class Lexer():
                                 self.tokens.append(token)
                                 self.lexeme_begin = self.forward
                                 return token
-
+                        
                         if self.NextChar() == ';':
                                 token = Token(';')
                                 token.attribute = ENDSTMT
                                 self.tokens.append(token)
                                 self.lexeme_begin = self.forward
                                 return token
+                        """
+                        No lexeme found, so lexical error is thrown.
+                        TODO: implement some exceptions and error correction,
+                        no need in aborting the process.
                         
+                        """
                         self.lexeme_begin = self.forward
                         print("Error at '%s'" % self.input[self.lexeme_begin:])
                         exit(0)
@@ -127,8 +166,16 @@ class Lexer():
                 else:
                         print("No lexemes left!")
                         return EOF
-                        
+        
+
         def GetOperator(self):
+                """
+                GetOperator() method:
+                        trying to find and return OPERATOR category token, False instead.
+                        implementation as simple as possible, but some of cases can conflict
+                        with '>.' relative operator
+                """
+
                 retToken = Token(OPERATOR)
                 c = self.NextChar()
                 print(c)
@@ -198,9 +245,11 @@ class Lexer():
                 return retToken
                         
                    
-                   
-
         def GetQuotes(self):
+                """
+                GetQuotes() method:
+                        and again, implementation is very straightforward.
+                """
                 c = self.NextChar()
                 retToken = Token("Quote")
 
@@ -218,10 +267,20 @@ class Lexer():
                         retToken.attribute = CLFQ
                 else:
                         self.Retract()
-                        #self.Fail()
+                        self.Fail()
                         return False
                 return retToken
+
         def GetNumber(self):
+                """
+                GetNumber() method:
+                        tries to find NUM token via NUM_RE regexp.
+                        some cases here, NUM_RE regexp is complicated, so after match we check,
+                        if there are additional groups found (mantissa and exponent) and process
+                        them too.
+                        TODO: may be add some simplicity? Who the fuck needs floating point numbers
+                        and >2^32 numbers in his programs?
+                """
                 retToken = Token(NUMBER)
                 match = NUM_RE.match(self.input[self.forward:])
                 if match is not None:
@@ -242,12 +301,25 @@ class Lexer():
                 self.Fail()
                 return False
 
+
         def NextChar(self):
+                """
+                NextChar() method:
+                        Simply return next char and push pointer forward (return *input[forward++])
+                """
                 self.forward += 1
                 return self.input[self.forward-1]
 
+
         def GetKeyword(self):
-                state = 0
+                """
+                GetKeyword() method:
+                        iterates over all keywords regexp in purpose of finding some keyword token
+                        can conflict with GetId() method, so being called before it in tokenization routine
+                        TODO: well, can I do something more faster than this in python?..
+
+                """
+                
                 retToken = Token(RESERVED)
                 part = self.input[self.forward: self.forward + 10]
 
@@ -263,6 +335,12 @@ class Lexer():
                 return False
 #       
         def GetId(self):
+                """
+                GetId() method:
+                        it takes all the text from current forward pointer and tries to match ID_RE regexp, in purpose of finding ID token.
+                        optimization???
+
+                """
                 retToken = Token(SYMBOL)
                 match = ID_RE.match(self.input[self.forward:])
                 if match is not None:
@@ -276,10 +354,19 @@ class Lexer():
 
 
         def Retract(self):
+                """
+                Retract() method:
+                        forward pointer decrementation, should be used when you taking NextChar(),
+                        but it was useless, and no lexeme found
+                """
                 self.forward -= 1
 
 
         def GetRelop(self):
+                """
+                GetRelop() method:
+                       tries to find RELOP token with finite automata, useless one.
+                """
                 retToken = Token(RELOP)
                 state = 0
                 #ipdb.set_trace()
@@ -344,11 +431,19 @@ class Lexer():
                                     retToken.attribute = GT
                                     return retToken
         def Fail(self):
+                """
+                Fail() method:
+                        is called when some lexing method failed to find Token
+                TODO: some error processing?
+                        
+                """
                 self.forward = self.lexeme_begin
-                #print('Failed at %s' % self.input[self.lexeme_begin: self.lexeme_begin + 10])
-    
-#simple hello world
+
+
 if __name__ == '__main__':
+        """
+        main func -- you can use it to test lexer, passing input text/filename via cmdline
+        """
         in_string = sys.argv[1]
         print("Lexing %s" % in_string)
         if os.path.isfile(in_string):
