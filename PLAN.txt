@@ -1,6 +1,7 @@
 Lexer; X
-Parser;
-Translator;
+Parser; (Output some pretty AST?)
+Optimization; 
+Translator; (optional)
 Generator;
 Optimization;
 Parallels?
