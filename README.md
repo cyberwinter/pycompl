@@ -1,2 +1,2 @@
 # pycompl
-Every man should write his own compiler once, doesn't he?
+A cake is lie - we using python re module here :)
